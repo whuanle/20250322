@@ -1,0 +1,60 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net9.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+	</PropertyGroup>
+
+
+	<ItemGroup>
+		<None Remove="assets\images\image1.jpg" />
+		<None Remove="assets\images\image2.jpg" />
+		<None Remove="assets\images\image3.jpg" />
+		<None Remove="assets\images\image4.jpg" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="assets\images\image1.jpg">
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Include="assets\images\image2.jpg">
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Include="assets\images\image3.jpg">
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+		<Content Include="assets\images\image4.jpg">
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+	<ItemGroup>
+		<Folder Include="assets\Model\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="OpenCvSharp4" Version="4.8.0.20230708" />
+		<PackageReference Include="OpenCvSharp4.Windows" Version="4.8.0.20230708" />
+		<PackageReference Include="OpenCvSharp4.WpfExtensions" Version="4.8.0.20230708" />
+		<PackageReference Include="Microsoft.ML" Version="5.0.0-preview.1.25127.4" />
+		<PackageReference Include="Microsoft.ML.ImageAnalytics" Version="5.0.0-preview.1.25127.4" />
+		<PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.21.0" />
+		<PackageReference Include="Microsoft.ML.OnnxTransformer" Version="5.0.0-preview.1.25127.4" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="assets\images\wikimedia.md">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="assets\Model\TinyYolo2_model.onnx">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
+</Project>
