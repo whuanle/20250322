@@ -16,6 +16,24 @@
 
 ### .NET AI 生态图
 
+![无标题-2025-03-18-0826](./images/无标题-2025-03-18-0826.png)
+
+
+
+#### 机器学习和数据科学库（Machine Learning and Data Science Libraries）
+
+##### MathNet.Numerics
+
+支持: 社区支持，成熟稳定。
+
+Star: `3.6k`
+
+Github: https://github.com/mathnet/mathnet-numerics
+
+NET Numerics 是 Math.NET 计划的数值基础，旨在为科学、工程和日常使用中的数值计算提供方法和算法。涵盖的主题包括特殊函数，线性代数，概率模型，随机数，统计，插值，积分，回归，曲线拟合，积分变换 (FFT) 等。
+
+
+
 #### 深度学习框架（Deep Learning Frameworks）
 
 ##### ML.NET
@@ -53,18 +71,6 @@ Github: [https://github.com/dotnet/TorchSharp](https://github.com/dotnet/TorchSh
 TorchSharp 通过绑定 libtorch 实现利用与 Pytorch 类似功能的深度学习框架。
 
 
-
-#### 机器学习和数据科学库（Machine Learning and Data Science Libraries）
-
-##### MathNet.Numerics
-
-支持: 社区支持，成熟稳定。
-
-Star: `3.6k`
-
-Github: https://github.com/mathnet/mathnet-numerics
-
-NET Numerics 是 Math.NET 计划的数值基础，旨在为科学、工程和日常使用中的数值计算提供方法和算法。涵盖的主题包括特殊函数，线性代数，概率模型，随机数，统计，插值，积分，回归，曲线拟合，积分变换 (FFT) 等。
 
 
 
@@ -124,8 +130,6 @@ fast-wiki: https://github.com/AIDotNet/fast-wiki
 
 
 
-
-
 ## 二、TorchSharp
 
 ### TorchSharp简介
@@ -144,6 +148,8 @@ TorchSharp 是由 .NET 开源基金会主导开发的项目，旨在为 .NET 社
 * 被许多世界顶尖的研究机构和工业界公司使用和认可，确保其前沿技术和稳定性。
 
 
+
+在主流 AI 模型仓库中大多数 Pytorch 格式的模型。
 
 https://huggingface.co/models
 
@@ -212,6 +218,165 @@ graph LR
     end
 ```
 
+#### 数据集
+
+https://opendatalab.com/
+
+```
+├─test
+│  ├─airplane
+│  ├─automobile
+│  ├─bird
+│  ├─cat
+│  ├─deer
+│  ├─dog
+│  ├─frog
+│  ├─horse
+│  ├─ship
+│  └─truck
+└─train
+│  ├─airplane
+│  ├─automobile
+│  ├─bird
+│  ├─cat
+│  ├─deer
+│  ├─dog
+│  ├─frog
+│  ├─horse
+│  ├─ship
+│  └─truck
+```
+
+![image-20250215205033982](./images/image-20250215205033982.png)
+
+
+
+#### 定义神经网络架构
+
+根据需求设计神经网络架构或使用开源网络架构。
+
+案例代码教程地址：https://torch.whuanle.cn/02.start/02.start_torch.html
+
+```csharp
+using TorchSharp.Modules;
+using static TorchSharp.torch;
+using nn = TorchSharp.torch.nn;
+
+public class NeuralNetwork : nn.Module<Tensor, Tensor>
+{
+    // 传递给基类的参数是模型的名称
+    public NeuralNetwork() : base(nameof(NeuralNetwork))
+    {
+        flatten = nn.Flatten();
+        linear_relu_stack = nn.Sequential(
+            nn.Linear(28 * 28, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 10));
+
+        // C# 版本需要调用这个函数，将模型的组件注册到模型中
+        RegisterComponents();
+    }
+
+    Flatten flatten;
+    Sequential linear_relu_stack;
+
+    public override Tensor forward(Tensor input)
+    {
+        // 将输入一层层处理并传递给下一层
+        var x = flatten.call(input);
+        var logits = linear_relu_stack.call(x);
+        return logits;
+    }
+}
+```
+
+
+
+TorchSharp 自带的网络架构：
+
+```
+alexnet
+googlenet
+inception_v3
+mobilenet_v2
+mobilenet_v3_large
+mobilenet_v3_small
+resnet18
+resnet34
+resnet50
+wide_resnet50_2
+resnext50_32x4d
+resnet101
+resnext101_32x8d
+resnext101_64x4d
+wide_resnet101_2
+resnet152
+vgg11
+vgg11_bn
+vgg13
+vgg13_bn
+vgg16
+vgg16_bn
+vgg19
+vgg19_bn
+```
+
+
+
+#### 训练模型
+
+
+
+```csharp
+static void Train(DataLoader dataloader, NeuralNetwork model, CrossEntropyLoss loss_fn, SGD optimizer)
+{
+    var size = dataloader.dataset.Count;
+    model.train();
+
+    int batch = 0;
+    foreach (var item in dataloader)
+    {
+        var x = item["data"];
+        var y = item["label"];
+
+        // 第一步
+        // 训练当前图片
+        var pred = model.call(x);
+
+        // 通过损失函数得出与真实结果的误差
+        var loss = loss_fn.call(pred, y);
+
+        // 第二步，反向传播
+        loss.backward();
+
+        // 计算梯度并优化参数
+        optimizer.step();
+
+        // 清空优化器当前的梯度
+        optimizer.zero_grad();
+
+        // 每 100 次打印损失值和当前训练的图片数量
+        if (batch % 100 == 0)
+        {
+            loss = loss.item<float>();
+
+            // Pytorch 框架会在 x.shape[0] 存储当前批的位置
+            var current = (batch + 1) * x.shape[0];
+
+            Console.WriteLine("loss: {loss.item<float>(),7}  [{current,5}/{size,5}]");
+        }
+
+        batch++;
+    }
+}
+```
+
+
+
+
+
 ### TorchSharp 案例
 
 https://torch.whuanle.cn
@@ -270,7 +435,18 @@ ONNX Runtime 是一个高性能推理引擎，用于执行通过 ONNX 格式表�
 
 ML.NET 是一个开源的跨平台机器学习框架，专门为 .NET 开发者提供易用的工具和算法库来构建和部署机器学习模型。
 
-### 
+优点：
+
+* **易于集成** ：ML.NET 可以轻松集成到现有的 .NET 应用程序中，无需离开 .NET 环境。
+* **跨平台支持** ：ML.NET 支持在 Windows、Linux 和 macOS 上运行，具备良好的跨平台兼容性。
+* **对性能要求不高** ：ML.NET 针对性能进行了优化，可以在性能不高的环境中运行，适合各种应用场景。
+* **CPU 和 GPU 支持** ：ML.NET 可以在 CPU 上运行，也可以利用 GPU 进行加速，适合不同硬件条件的应用。
+* **嵌入式设备支持** ：ML.NET 可以在一些嵌入式设备上运行，提供更广泛的硬件兼容性。
+* **扩展性** ：ML.NET 允许集成其它机器学习库（如 TensorFlow 和 ONNX），使得开发者可以使用最先进的机器学习技术。
+* **自动化机器学习** ：ML.NET 包含 AutoML 功能，可以自动化地选择和调优模型，减少了机器学习过程中的人工干预。
+* **丰富的算法支持** ：ML.NET 支持多种机器学习算法，包括分类、回归、聚类、推荐等多类型算法，满足不同的业务需求。
+* **易于使用** ：提供了丰富的 API 和文档，开发者可以快速上手，学习曲线相对较低。
+* **社区支持** ：作为一个开源项目，ML.NET 拥有一个活跃的社区，开发者可以获得支持并参与到项目的改进中。
 
 ```mermaid
 graph LR
@@ -330,7 +506,7 @@ graph LR
 
 
 
-部署推理 Phi-4-mini-instruct-onnx 示例。
+部署推理 Phi-4-mini-instruct-onnx （32B）示例。
 
 <video src="images/phi4-cpu.mp4"></video>
 
