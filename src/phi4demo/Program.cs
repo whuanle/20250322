@@ -27,7 +27,8 @@ using System.Reflection.Emit;
 using System.Reflection;
 
 var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-var modelPath = Path.Combine(userHome, ".cache", @"modelscope\hub\LLM-Research\Phi-4-mini-instruct-onnx\cpu_and_mobile\cpu-int4-rtn-block-32-acc-level-4");
+// var modelPath = Path.Combine(userHome, ".cache", @"modelscope\hub\LLM-Research\Phi-4-mini-instruct-onnx\cpu_and_mobile\cpu-int4-rtn-block-32-acc-level-4");
+var modelPath = Path.Combine(userHome, ".cache", @"modelscope\hub\models\LLM-Research\Phi-4-mini-instruct-onnx\cpu_and_mobile\cpu-int4-rtn-block-32-acc-level-4");
 
 var systemPrompt = "You are an AI assistant that helps people find information. Answer questions using a direct style. Do not share more information that the requested by the users.";
 

@@ -1,22 +1,19 @@
 using Microsoft.ML;
+using Microsoft.ML.Data;
+using Microsoft.ML.Transforms.Image;
 using Microsoft.Win32;
-using ObjectDetection;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
-using System;
-using System.Drawing.Drawing2D;
+using SkiaSharp;
 using System.Drawing;
 using System.IO;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
-using ObjectDetection.YoloParser;
-using System.Linq;
-using ObjectDetection.DataStructures;
-using Microsoft.ML.Transforms.Image;
-using Microsoft.ML.Data;
 using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Threading;
+using YoloDotNet;
+using YoloDotNet.Enums;
+using YoloDotNet.Extensions;
+using YoloDotNet.Models;
 
 namespace VideoProcessor
 {
@@ -25,55 +22,68 @@ namespace VideoProcessor
         private VideoCapture? capture;
         private bool isProcessing = false;
         private DispatcherTimer? timer;
-        private MLContext mlContext = new MLContext();
-        private OnnxModelScorer? modelScorer;
-        private YoloOutputParser parser;
-        private string modelPath;
-        private ITransformer? modelTransformer;
+        private DateTime lastProcessTime = DateTime.MinValue;
+        private const int PROCESS_INTERVAL_MS = 100; // Process every 100ms
+
+        const string assetsRelativePath = @"assets";
+        private readonly string assetsPath = GetAbsolutePath(assetsRelativePath);
+        private readonly string modelPath;
+        private ITransformer? model;
+        private DateTime lastYoloProcessTime = DateTime.MinValue;
+        private const int YOLO_PROCESS_INTERVAL_MS = 100;
+
+        private readonly Yolo _yolo;
 
         public MainWindow()
         {
             InitializeComponent();
-            
-            // Initialize model
-            var assetsRelativePath = @"assets";
-            string assetsPath = GetAbsolutePath(assetsRelativePath);
+
+            // Initialize model path
             modelPath = Path.Combine(assetsPath, "Model", "TinyYolo2_model.onnx");
-            parser = new YoloOutputParser();
             
-            try 
+            // Print model path for debugging
+            Console.WriteLine($"Model Path: {modelPath}");
+            
+            // Check if model file exists
+            if (!File.Exists(modelPath))
             {
-                // Check if model file exists
-                if (!File.Exists(modelPath))
+                // Try to find the model file in the current directory
+                var currentDirModelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "Model", "TinyYolo2_model.onnx");
+                Console.WriteLine($"Trying alternative path: {currentDirModelPath}");
+                
+                if (File.Exists(currentDirModelPath))
                 {
-                    MessageBox.Show($"Model file not found at: {modelPath}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    modelPath = currentDirModelPath;
+                    Console.WriteLine($"Found model at: {modelPath}");
+                }
+                else
+                {
+                    MessageBox.Show($"Model file not found at:\n{modelPath}\nor\n{currentDirModelPath}\n\nPlease make sure the model file exists in the assets/Model directory.",
+                        "Model Not Found",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
                     return;
                 }
+            }
 
-                // Create pipeline for image processing
-                var pipeline = mlContext.Transforms.ExtractPixels(
-                        outputColumnName: "input_1", 
-                        scaleImage: 1f / 255f,
-                        interleavePixelColors: true,
-                        offsetImage: 0f,
-                        inputColumnName: nameof(ImageInputData.Image))
-                    .Append(mlContext.Transforms.ApplyOnnxModel(
-                        modelFile: modelPath,
-                        outputColumnNames: new[] { "grid" },
-                        inputColumnNames: new[] { "input_1" }));
-
-                // Create empty data to get input schema
-                var emptyData = mlContext.Data.LoadFromEnumerable(new List<ImageInputData>());
-                var imagesFolder = Path.Combine(assetsPath, "images");
-                IEnumerable<ImageNetData> images = ImageNetData.ReadFromFile(imagesFolder);
-                IDataView imageDataView = mlContext.Data.LoadFromEnumerable(images);
-
-                modelTransformer = pipeline.Fit(imageDataView);
+            try
+            {
+                _yolo = new Yolo(new YoloOptions
+                {
+                    OnnxModel = modelPath,          // Your Yolo model in onnx format
+                    ModelType = ModelType.ObjectDetection,      // Set your model type
+                    Cuda = false,                               // Use CPU or CUDA for GPU accelerated inference. Default = true
+                    GpuId = 0,                                  // Select Gpu by id. Default = 0
+                    PrimeGpu = false,                           // Pre-allocate GPU before first inference. Default = false
+                });
+                Console.WriteLine("YOLO model initialized successfully");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading model: {ex.Message}\nStack trace: {ex.StackTrace}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
+                MessageBox.Show($"Error initializing YOLO model: {ex.Message}\nStack trace: {ex.StackTrace}",
+                    "Model Initialization Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
@@ -142,7 +152,7 @@ namespace VideoProcessor
                 using var frame = new Mat();
                 if (capture.Read(frame))
                 {
-                    var processedFrame = ProcessFrame(frame);
+                    var processedFrame = await ProcessFrame(frame);
                     await Dispatcher.InvokeAsync(() =>
                     {
                         ProcessedVideo.Source = processedFrame.ToBitmapSource();
@@ -151,7 +161,7 @@ namespace VideoProcessor
             }
         }
 
-        private Mat ProcessFrame(Mat frame)
+        private async Task<Mat> ProcessFrame(Mat frame)
         {
             var processedFrame = new Mat();
             var effect = EffectSelector.SelectedIndex;
@@ -170,14 +180,14 @@ namespace VideoProcessor
                     Cv2.GaussianBlur(frame, processedFrame, new OpenCvSharp.Size(15, 15), 0);
                     break;
                 case 3: // 物体识别
-                    if (modelTransformer != null)
+                    if (File.Exists(modelPath))
                     {
-                        processedFrame = ProcessYoloFrame(frame);
+                        processedFrame = await ProcessYoloFrame(frame);
                     }
                     else
                     {
                         frame.CopyTo(processedFrame);
-                        Cv2.PutText(processedFrame, "Model not loaded!", new OpenCvSharp.Point(10, 30),
+                        Cv2.PutText(processedFrame, "Model file not found!", new OpenCvSharp.Point(10, 30),
                             HersheyFonts.HersheySimplex, 1.0, new Scalar(0, 0, 255), 2);
                     }
                     break;
@@ -189,79 +199,36 @@ namespace VideoProcessor
             return processedFrame;
         }
 
-        private Mat ProcessYoloFrame(Mat frame)
+        private async Task<Mat> ProcessYoloFrame(Mat frame)
         {
             var processedFrame = new Mat();
             frame.CopyTo(processedFrame);
 
-            try
-            {
-                if (modelTransformer == null)
-                    throw new InvalidOperationException("Model not loaded");
+            // Convert Mat to Bitmap
+            using var bitmap = BitmapConverter.ToBitmap(processedFrame);
+            
+            // Convert Bitmap to SKImage
+            using var ms = new MemoryStream();
+            bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            ms.Position = 0;
+            using var skBitmap = SKBitmap.Decode(ms);
+            using var image = SKImage.FromBitmap(skBitmap);
 
-                // Resize frame to match YOLO input size
-                var resizedFrame = new Mat();
-                Cv2.Resize(frame, resizedFrame, new OpenCvSharp.Size(416, 416));
+            // Run YOLO detection and draw results
+            var results = _yolo.RunObjectDetection(image, confidence: 0.25, iou: 0.7);
+            using var resultImage = image.Draw(results);
 
-                // Convert to byte array
-                var imageBytes = new byte[resizedFrame.Total() * resizedFrame.ElemSize()];
-                Marshal.Copy(resizedFrame.Data, imageBytes, 0, imageBytes.Length);
-
-                // Create input data
-                var imageInputData = new ImageInputData
-                {
-                    Image = imageBytes
-                };
-
-                // Create prediction engine
-                var predictionEngine = mlContext.Model.CreatePredictionEngine<ImageInputData, ImagePrediction>(modelTransformer);
-
-                // Get prediction
-                var prediction = predictionEngine.Predict(imageInputData);
-
-                // Parse outputs
-                var boxes = parser.ParseOutputs(prediction.PredictedLabels);
-                var filteredBoxes = parser.FilterBoundingBoxes(boxes, 5, 0.5F);
-
-                // Calculate scale factors for bounding box coordinates
-                float xScale = (float)frame.Width / 416;
-                float yScale = (float)frame.Height / 416;
-
-                // Draw boxes on the frame
-                foreach (var box in filteredBoxes)
-                {
-                    // Get Bounding Box Dimensions and scale them
-                    var x = (int)(Math.Max(box.Dimensions.X, 0) * xScale);
-                    var y = (int)(Math.Max(box.Dimensions.Y, 0) * yScale);
-                    var width = (int)(box.Dimensions.Width * xScale);
-                    var height = (int)(box.Dimensions.Height * yScale);
-
-                    // Draw bounding box
-                    Cv2.Rectangle(processedFrame, new OpenCvSharp.Point(x, y), 
-                        new OpenCvSharp.Point(x + width, y + height), 
-                        new Scalar(box.BoxColor.B, box.BoxColor.G, box.BoxColor.R), 2);
-
-                    // Draw label
-                    string text = $"{box.Label} ({(box.Confidence * 100):0}%)";
-                    var textSize = Cv2.GetTextSize(text, HersheyFonts.HersheySimplex, 0.5, 1, out var baseline);
-                    Cv2.Rectangle(processedFrame, 
-                        new OpenCvSharp.Point(x, y - textSize.Height - baseline), 
-                        new OpenCvSharp.Point(x + textSize.Width, y),
-                        new Scalar(box.BoxColor.B, box.BoxColor.G, box.BoxColor.R), -1);
-                    Cv2.PutText(processedFrame, text, 
-                        new OpenCvSharp.Point(x, y - baseline),
-                        HersheyFonts.HersheySimplex, 0.5, new Scalar(255, 255, 255), 1);
-                }
-            }
-            catch (Exception ex)
-            {
-                Cv2.PutText(processedFrame, $"Error: {ex.Message}", new OpenCvSharp.Point(10, 30),
-                    HersheyFonts.HersheySimplex, 1.0, new Scalar(0, 0, 255), 2);
-            }
+            // Convert resultImage back to Mat
+            using var resultBitmap = SKBitmap.FromImage(resultImage);
+            using var data = resultBitmap.Encode(SKEncodedImageFormat.Png, 100);
+            
+            // Convert to Mat using OpenCV's ImDecode
+            var imageData = data.ToArray();
+            using var resultMat = Cv2.ImDecode(imageData, ImreadModes.Color);
+            resultMat.CopyTo(processedFrame);
 
             return processedFrame;
         }
-
         private void EffectSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             // 效果改变时不需要特殊处理，因为下一帧会自动应用新效果
@@ -274,90 +241,43 @@ namespace VideoProcessor
             base.OnClosed(e);
         }
 
-        string GetAbsolutePath(string relativePath)
+        static string GetAbsolutePath(string relativePath)
         {
             FileInfo _dataRoot = new FileInfo(typeof(MainWindow).Assembly.Location);
             string assemblyFolderPath = _dataRoot.Directory.FullName;
 
             string fullPath = Path.Combine(assemblyFolderPath, relativePath);
+            
+            // Print paths for debugging
+            Console.WriteLine($"Assembly Location: {_dataRoot.FullName}");
+            Console.WriteLine($"Assembly Folder: {assemblyFolderPath}");
+            Console.WriteLine($"Relative Path: {relativePath}");
+            Console.WriteLine($"Full Path: {fullPath}");
+            
+            // Check if directory exists
+            if (!Directory.Exists(fullPath))
+            {
+                Console.WriteLine($"Warning: Directory does not exist: {fullPath}");
+            }
+            else
+            {
+                Console.WriteLine($"Directory exists: {fullPath}");
+                Console.WriteLine("Directory contents:");
+                foreach (var file in Directory.GetFiles(fullPath, "*.*", SearchOption.AllDirectories))
+                {
+                    Console.WriteLine($"  - {file}");
+                }
+            }
 
             return fullPath;
         }
 
-        void DrawBoundingBox(string inputImageLocation, string outputImageLocation, string imageName, IList<YoloBoundingBox> filteredBoundingBoxes)
-        {
-            Image image = Image.FromFile(Path.Combine(inputImageLocation, imageName));
-
-            var originalImageHeight = image.Height;
-            var originalImageWidth = image.Width;
-
-            foreach (var box in filteredBoundingBoxes)
-            {
-                // Get Bounding Box Dimensions
-                var x = (uint)Math.Max(box.Dimensions.X, 0);
-                var y = (uint)Math.Max(box.Dimensions.Y, 0);
-                var width = (uint)Math.Min(originalImageWidth - x, box.Dimensions.Width);
-                var height = (uint)Math.Min(originalImageHeight - y, box.Dimensions.Height);
-
-                // Resize To Image
-                x = (uint)originalImageWidth * x / OnnxModelScorer.ImageNetSettings.imageWidth;
-                y = (uint)originalImageHeight * y / OnnxModelScorer.ImageNetSettings.imageHeight;
-                width = (uint)originalImageWidth * width / OnnxModelScorer.ImageNetSettings.imageWidth;
-                height = (uint)originalImageHeight * height / OnnxModelScorer.ImageNetSettings.imageHeight;
-
-                // Bounding Box Text
-                string text = $"{box.Label} ({(box.Confidence * 100).ToString("0")}%)";
-
-                using (Graphics thumbnailGraphic = Graphics.FromImage(image))
-                {
-                    thumbnailGraphic.CompositingQuality = CompositingQuality.HighQuality;
-                    thumbnailGraphic.SmoothingMode = SmoothingMode.HighQuality;
-                    thumbnailGraphic.InterpolationMode = InterpolationMode.HighQualityBicubic;
-
-                    // Define Text Options
-                    Font drawFont = new Font("Arial", 12, System.Drawing.FontStyle.Bold);
-                    SizeF size = thumbnailGraphic.MeasureString(text, drawFont);
-                    SolidBrush fontBrush = new SolidBrush(Color.Black);
-                    System.Drawing.Point atPoint = new System.Drawing.Point((int)x, (int)y - (int)size.Height - 1);
-
-                    // Define BoundingBox options
-                    Pen pen = new Pen(box.BoxColor, 3.2f);
-                    SolidBrush colorBrush = new SolidBrush(box.BoxColor);
-
-                    // Draw text on image 
-                    thumbnailGraphic.FillRectangle(colorBrush, (int)x, (int)(y - size.Height - 1), (int)size.Width, (int)size.Height);
-                    thumbnailGraphic.DrawString(text, drawFont, fontBrush, atPoint);
-
-                    // Draw bounding box on image
-                    thumbnailGraphic.DrawRectangle(pen, x, y, width, height);
-                }
-            }
-
-            if (!Directory.Exists(outputImageLocation))
-            {
-                Directory.CreateDirectory(outputImageLocation);
-            }
-
-            image.Save(Path.Combine(outputImageLocation, imageName));
-        }
-
-        void LogDetectedObjects(string imageName, IList<YoloBoundingBox> boundingBoxes)
-        {
-            Console.WriteLine($".....The objects in the image {imageName} are detected as below....");
-
-            foreach (var box in boundingBoxes)
-            {
-                Console.WriteLine($"{box.Label} and its Confidence score: {box.Confidence}");
-            }
-
-            Console.WriteLine("");
-        }
-
         // Input data class for ML.NET
-        private class ImageInputData
+        private class ImageNetData
         {
             [ImageType(416, 416)]
             public byte[] Image { get; set; }
+            public string Label { get; set; }
         }
 
         // Output data class for ML.NET
@@ -366,5 +286,36 @@ namespace VideoProcessor
             [VectorType(1, 125, 13, 13)]
             public float[] PredictedLabels { get; set; }
         }
+
+        // Helper class for bitmap conversion
+        private static class BitmapConverter
+        {
+            public static Bitmap ToBitmap(Mat mat)
+            {
+                // Convert to BGR24 format
+                using var bgr = mat.CvtColor(ColorConversionCodes.BGR2RGB);
+                // Create bitmap with the same dimensions
+                var bitmap = new Bitmap(mat.Width, mat.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                // Lock bits to get direct access to pixel data
+                var bitmapData = bitmap.LockBits(
+                    new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                    System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                    bitmap.PixelFormat);
+
+                try
+                {
+                    // Copy pixel data
+                    var length = Math.Min((int)bgr.Total() * bgr.ElemSize(), Math.Abs(bitmapData.Stride) * bitmap.Height);
+                    var data = new byte[length];
+                    Marshal.Copy(bgr.Data, data, 0, length);
+                    Marshal.Copy(data, 0, bitmapData.Scan0, length);
+                    return bitmap;
+                }
+                finally
+                {
+                    bitmap.UnlockBits(bitmapData);
+                }
+            }
+        }
     }
-} 
+}

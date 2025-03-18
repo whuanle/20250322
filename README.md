@@ -484,7 +484,7 @@ graph LR
 
 #### ML.NET 官方示例
 
- 官方仓库: [https://github.com/dotnet/machinelearning-samples](https://github.com/dotnet/machinelearning-samples)
+ 官方仓库:  https://github.com/dotnet/machinelearning-samples
 
 1. **情绪分析**: 使用二进制分类算法分析客户评论情感。
 2. **产品推荐**: 使用矩阵分解算法根据购买历史推荐产品。
@@ -506,7 +506,16 @@ graph LR
 
 
 
-部署推理 Phi-4-mini-instruct-onnx （32B）示例。
+部署推理 Phi-4-mini-instruct-onnx （32B，int4 量化），CPU：AMD 8745H，内存 32GB。
+
+| Hardware                           | ONNX                                                         | PyTorch                 | speedup  |
+| ---------------------------------- | ------------------------------------------------------------ | ----------------------- | -------- |
+| RTX 4090 GPU                       | int4: 260.045 tokens/sec fp16: 97.463 tokens/se fp32: 19.320 tokens/sec | fp16: 43.957 tokens/sec | 5x(fp16) |
+| Intel Xeon Platinum 8272CL CPU     | int4: 16.89 tokens/sec                                       | fp32: 1.636 tokens/sec  | 10x      |
+| Intel Xeon Platinum 8573B CPU      | int4: 23.978 tokens/sec                                      | fp32: 4.479 tokens/sec  | 5.35X    |
+| AMD EPYC 7763v CPU                 | int4: 19.884 tokens/sec                                      | fp32: 1.599 tokens/sec  | 12.4x    |
+| Intel Core Ultra 7 165H Laptop CPU | int4: 4.863 tokens/sec                                       | fp32: 1.699 tokens/sec  | 2.8x     |
+| Intel i7 processor                 | int4: 3.474 tokens/sec fp32: 1.800 tokens/sec                | fp32: 0.702 tokens/sec  | 4.85x    |
 
 <video src="images/phi4-cpu.mp4"></video>
 
@@ -515,6 +524,8 @@ graph LR
 #### 基于 ML.NET 的开源项目
 
 开源项目：
+
+https://github.com/gerardo-lijs/MachineLearning-ObjectDetect-WPF
 
 https://github.com/dme-compunet/YoloSharp
 

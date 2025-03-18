@@ -1,43 +1,186 @@
 <Window x:Class="VideoProcessor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Video Processor" Height="600" Width="1200">
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        
-        <Grid Grid.Column="0" Margin="10">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-            <MediaElement x:Name="SourceVideo" 
-                        LoadedBehavior="Manual" 
-                        UnloadedBehavior="Manual"
-                        MediaOpened="SourceVideo_MediaOpened"
-                        MediaEnded="SourceVideo_MediaEnded"/>
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0">
-                <Button x:Name="OpenButton" Content="打开视频" Click="OpenButton_Click" Width="100" Margin="0,0,10,0"/>
-                <Button x:Name="PlayButton" Content="播放" Click="PlayButton_Click" Width="100" Margin="0,0,10,0"/>
-                <Button x:Name="PauseButton" Content="暂停" Click="PauseButton_Click" Width="100"/>
-            </StackPanel>
-        </Grid>
+        Title="Video Processor" Height="720" Width="1280"
+        Background="#F0F0F0">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <Grid Grid.Column="1" Margin="10">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-            <Image x:Name="ProcessedVideo"/>
-            <ComboBox x:Name="EffectSelector" Grid.Row="1" Margin="0,10,0,0"
-                      SelectionChanged="EffectSelector_SelectionChanged">
-                <ComboBoxItem Content="灰度效果" IsSelected="True"/>
+        <!-- Top Control Panel -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+            <Button x:Name="OpenButton" Click="OpenButton_Click" 
+                    Width="80" Height="30" Margin="0,0,10,0"
+                    Background="#2196F3" Foreground="White" BorderThickness="0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="打开" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            
+            <Button x:Name="PlayButton" Click="PlayButton_Click"
+                    Width="80" Height="30" Margin="0,0,10,0"
+                    Background="#4CAF50" Foreground="White" BorderThickness="0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="播放" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            
+            <Button x:Name="PauseButton" Click="PauseButton_Click"
+                    Width="80" Height="30" Margin="0,0,10,0"
+                    Background="#FF5722" Foreground="White" BorderThickness="0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="暂停" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <ComboBox x:Name="EffectSelector" Width="120" Height="30"
+                      SelectedIndex="0" SelectionChanged="EffectSelector_SelectionChanged"
+                      VerticalContentAlignment="Center">
+                <ComboBoxItem Content="灰度效果"/>
                 <ComboBoxItem Content="边缘检测"/>
                 <ComboBoxItem Content="模糊效果"/>
-                <ComboBoxItem Content="物体检测"/>
+                <ComboBoxItem Content="物体识别"/>
             </ComboBox>
+        </StackPanel>
+
+        <!-- Video Display Area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Source Video -->
+            <Border Grid.Column="0" Margin="0,0,5,0" 
+                    Background="#333333" CornerRadius="5">
+                <Grid>
+                    <MediaElement x:Name="SourceVideo" 
+                                LoadedBehavior="Manual"
+                                MediaOpened="SourceVideo_MediaOpened"
+                                MediaEnded="SourceVideo_MediaEnded"
+                                Stretch="Uniform"/>
+                    <TextBlock Text="原始视频" 
+                             Foreground="White" Background="#80000000"
+                             Padding="10,5" 
+                             HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                </Grid>
+            </Border>
+
+            <!-- Processed Video -->
+            <Border Grid.Column="1" Margin="5,0,0,0"
+                    Background="#333333" CornerRadius="5">
+                <Grid>
+                    <Image x:Name="ProcessedVideo" Stretch="Uniform"/>
+                    <TextBlock Text="处理后视频" 
+                             Foreground="White" Background="#80000000"
+                             Padding="10,5"
+                             HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                </Grid>
+            </Border>
         </Grid>
+
+        <!-- Status Bar -->
+        <StatusBar Grid.Row="2" Height="25" Background="Transparent">
+            <StatusBarItem>
+                <TextBlock x:Name="StatusText" Text="就绪"/>
+            </StatusBarItem>
+        </StatusBar>
     </Grid>
+
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.8"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Opacity" Value="0.6"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Border Background="White"
+                                BorderThickness="1"
+                                BorderBrush="#DDDDDD"
+                                CornerRadius="4">
+                            <Grid>
+                                <ToggleButton x:Name="ToggleButton"
+                                            BorderBrush="Transparent"
+                                            Background="Transparent"
+                                            Focusable="False"
+                                            IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="20"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter Grid.Column="0"
+                                                                Content="{TemplateBinding Content}"
+                                                                Margin="5,0,0,0"
+                                                                VerticalAlignment="Center"/>
+                                                <Path Grid.Column="1"
+                                                      Data="M0,0 L4,4 L8,0"
+                                                      Stroke="#666666"
+                                                      StrokeThickness="1"
+                                                      VerticalAlignment="Center"
+                                                      HorizontalAlignment="Center"/>
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <ContentPresenter x:Name="ContentSite"
+                                                Content="{TemplateBinding SelectionBoxItem}"
+                                                ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                                Margin="5,0,0,0"
+                                                VerticalAlignment="Center"/>
+                                <Popup x:Name="Popup"
+                                       Placement="Bottom"
+                                       IsOpen="{TemplateBinding IsDropDownOpen}"
+                                       AllowsTransparency="True"
+                                       Focusable="False"
+                                       PopupAnimation="Slide">
+                                    <Grid x:Name="DropDown"
+                                          SnapsToDevicePixels="True"
+                                          MinWidth="{TemplateBinding ActualWidth}"
+                                          MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                        <Border x:Name="DropDownBorder"
+                                                Background="White"
+                                                BorderThickness="1"
+                                                BorderBrush="#DDDDDD"
+                                                CornerRadius="4">
+                                            <ScrollViewer Margin="0,4">
+                                                <StackPanel IsItemsHost="True"/>
+                                            </ScrollViewer>
+                                        </Border>
+                                    </Grid>
+                                </Popup>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 </Window> 
